@@ -13,11 +13,8 @@ import getpass
 base_url = 'https://digital.freitag.de/'
 login_url = base_url + 'login/'
 
-username = input('username: ')
-password = getpass.getpass()
 
-
-def setup_login_data(text):
+def setup_login_data(text, username, password):
     soup = BeautifulSoup(text, 'lxml')
     csrf_middleware_token = soup.select_one(
         'input[name="csrfmiddlewaretoken"]')['value']
@@ -44,7 +41,7 @@ def get_download_urls(content):
     return pdf_url, epub_url
 
 
-def fetch_newspaper_binaries():
+def fetch_newspaper_binaries(username, password):
     headers = {
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:69.0) Gecko/20100101 Firefox/69.0',
@@ -54,7 +51,7 @@ def fetch_newspaper_binaries():
     with requests.Session() as session:
 
         login_page = session.get(login_url)
-        payload = setup_login_data(login_page.text)
+        payload = setup_login_data(login_page.text, username, password)
         start_page = session.post(login_url,
                                   data=payload, headers=headers)
 
@@ -76,17 +73,32 @@ def get_isodate():
     return today.isocalendar()
 
 
-def write_file(path, file_name, binaries):
-    with open(Path(path, file_name), 'wb') as f:
-        f.write(binaries)
+def create_path(*folders):
+    path = Path(*folders)
+    path.mkdir(parents=True, exist_ok=True)
+
+    return path
 
 
-year, week, _ = get_isodate()
-issue = '{}{}-der-freitag'.format(year, week)
+def get_issue_name():
+    year, week, _ = get_isodate()
+    return '{}{}-der-freitag'.format(year, week)
 
-path = Path('newspaper', '{}'.format(year))
-path.mkdir(parents=True, exist_ok=True)
 
-newspaper = fetch_newspaper_binaries()
-for file_format, binaries in newspaper.items():
-    write_file(path, '{}.{}'.format(issue, file_format), binaries)
+def write_file(newspaper, path):
+    issue_name = get_issue_name()
+
+    for file_format, binaries in newspaper.items():
+        file_name = '{}.{}'.format(issue_name, file_format)
+        with open(Path(path, file_name), 'wb') as f:
+            f.write(binaries)
+
+
+if __name__ == "__main__":
+    username = input('username: ')
+    password = getpass.getpass()
+    newspaper = fetch_newspaper_binaries(username, password)
+
+    year, week, _ = get_isodate()
+    path = create_path('newspaper', str(year), str(week))
+    write_file(newspaper, path)
